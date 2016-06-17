@@ -128,6 +128,9 @@ namespace Kino
          "to the screen height. Large values may introduce artifacts.")]
         float _maxBlurRadius = 3.5f;
 
+        [SerializeField, Range(0, 1)]
+        float _accumulationRatio = 0;
+
         #endregion
 
         #region Debug settings
@@ -144,6 +147,8 @@ namespace Kino
 
         [SerializeField] Shader _prefilterShader;
         [SerializeField] Shader _reconstructionShader;
+
+        RenderTexture _accumulationTexture;
 
         Material _prefilterMaterial;
         Material _reconstructionMaterial;
@@ -250,7 +255,30 @@ namespace Kino
             _reconstructionMaterial.SetTexture("_NeighborMaxTex", neighborMax);
             _reconstructionMaterial.SetTexture("_VelocityTex", vbuffer);
 
-            Graphics.Blit(source, destination, _reconstructionMaterial, (int)_debugMode);
+            var temp = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
+            Graphics.Blit(source, temp, _reconstructionMaterial, (int)_debugMode);
+
+            // Pass 7 - Color accumulation
+            if (_accumulationRatio > 0)
+            {
+                var temp2 = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
+
+                _prefilterMaterial.SetTexture("_AccTex", _accumulationTexture);
+                _prefilterMaterial.SetFloat("_AccumulationRatio", _accumulationRatio);
+                Graphics.Blit(temp, temp2, _prefilterMaterial, 5);
+
+                Graphics.Blit(temp2, destination);
+
+                ReleaseTemporaryRT(_accumulationTexture);
+
+                _accumulationTexture = temp2;
+            }
+            else
+            {
+                Graphics.Blit(temp, destination);
+            }
+
+            ReleaseTemporaryRT(temp);
 
             // Cleaning up
             ReleaseTemporaryRT(vbuffer);

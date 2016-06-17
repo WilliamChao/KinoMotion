@@ -36,6 +36,7 @@ namespace Kino
         SerializedProperty _sampleCount;
         SerializedProperty _sampleCountValue;
         SerializedProperty _maxBlurRadius;
+        SerializedProperty _accumulationRatio;
         SerializedProperty _debugMode;
 
         static GUIContent _textScale = new GUIContent("Scale");
@@ -51,6 +52,7 @@ namespace Kino
             _sampleCount = serializedObject.FindProperty("_sampleCount");
             _sampleCountValue = serializedObject.FindProperty("_sampleCountValue");
             _maxBlurRadius = serializedObject.FindProperty("_maxBlurRadius");
+            _accumulationRatio = serializedObject.FindProperty("_accumulationRatio");
             _debugMode = serializedObject.FindProperty("_debugMode");
         }
 
@@ -87,6 +89,7 @@ namespace Kino
             }
 
             EditorGUILayout.PropertyField(_maxBlurRadius, _textMaxBlur);
+            EditorGUILayout.PropertyField(_accumulationRatio);
             EditorGUILayout.PropertyField(_debugMode);
 
             serializedObject.ApplyModifiedProperties();

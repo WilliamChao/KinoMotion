@@ -26,6 +26,7 @@ Shader "Hidden/Kino/Motion/Prefilter"
     Properties
     {
         _MainTex("", 2D) = ""{}
+        _AccTex("", 2D) = ""{}
     }
 
     CGINCLUDE
@@ -50,6 +51,11 @@ Shader "Hidden/Kino/Motion/Prefilter"
     // TileMax filter parameters
     int _TileMaxLoop;
     float2 _TileMaxOffs;
+
+    // Color accumulation
+    sampler2D _AccTex;
+    float4 _AccTex_TexelSize;
+    float _AccumulationRatio;
 
     // Selects the largest vector of v1 and v2.
     half2 VMax(half2 v1, half2 v2)
@@ -200,6 +206,14 @@ Shader "Hidden/Kino/Motion/Prefilter"
         return half4(VMax(va, VMax(vb, vc)) / cw, 0, 0);
     }
 
+    // Pass 5 - Color accumulation
+    half4 frag_accumulation(v2f_img i) : SV_Target
+    {
+        half4 c1 = tex2D(_MainTex, i.uv);
+        half4 c2 = tex2D(_AccTex, i.uv);
+        return lerp(c1, c2, _AccumulationRatio);
+    }
+
     ENDCG
 
     Subshader
@@ -246,6 +260,15 @@ Shader "Hidden/Kino/Motion/Prefilter"
             CGPROGRAM
             #pragma vertex vert_img
             #pragma fragment frag_neighbor_max
+            #pragma target 3.0
+            ENDCG
+        }
+        Pass
+        {
+            ZTest Always Cull Off ZWrite Off
+            CGPROGRAM
+            #pragma vertex vert_img
+            #pragma fragment frag_accumulation
             #pragma target 3.0
             ENDCG
         }
