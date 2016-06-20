@@ -26,6 +26,7 @@ Shader "Hidden/Kino/Motion/Reconstruction"
     Properties
     {
         _MainTex       ("", 2D) = ""{}
+        _BlurTex       ("", 2D) = ""{}
         _VelocityTex   ("", 2D) = ""{}
         _NeighborMaxTex("", 2D) = ""{}
     }
@@ -36,6 +37,9 @@ Shader "Hidden/Kino/Motion/Reconstruction"
 
     sampler2D _MainTex;
     float4 _MainTex_TexelSize;
+
+    sampler2D _BlurTex;
+    float4 _BlurTex_TexelSize;
 
     sampler2D_half _VelocityTex;
     float4 _VelocityTex_TexelSize;
@@ -165,7 +169,8 @@ Shader "Hidden/Kino/Motion/Reconstruction"
         half l_v_max = length(v_max);
 
         // Escape early if the NeighborMax vector is too short.
-        if (l_v_max < 0.5) return tex2D(_MainTex, i.uv0);
+        //if (l_v_max < 0.5) return tex2D(_MainTex, i.uv0);
+        if (l_v_max < 0.5) return float4(0, 0, 0, 1);
 
         // Linearized depth at p.
         half z_p = v_c_t.z;
@@ -180,7 +185,7 @@ Shader "Hidden/Kino/Motion/Reconstruction"
         // The center sample.
         half sampleCount = _LoopCount * 2.0f;
         half totalWeight = sampleCount / (l_v_c * 40);
-        half3 result = tex2D(_MainTex, i.uv0) * totalWeight;
+        half3 result = 0;//tex2D(_MainTex, i.uv0) * totalWeight;
 
         // Start from t=-1 + small jitter.
         // The width of jitter is equivalent to 4 sample steps.
@@ -218,7 +223,30 @@ Shader "Hidden/Kino/Motion/Reconstruction"
             }
         }
 
-        return half4(result / totalWeight, 1);
+        return half4(result / totalWeight, sampleCount / (l_v_c * 40) / totalWeight);
+        //return half4(result / totalWeight, 1);
+    }
+
+    float2 _BlurVector;
+
+    half4 frag_blur(v2f_multitex i) : SV_Target
+    {
+        float2 d = _MainTex_TexelSize.xy * _BlurVector;
+
+        half4 c1 = tex2D(_MainTex, i.uv0) * 5;
+        half4 c2 = tex2D(_MainTex, i.uv0 - d) * 3;
+        half4 c3 = tex2D(_MainTex, i.uv0 + d) * 3;
+        half4 c4 = tex2D(_MainTex, i.uv0 - d * 2);
+        half4 c5 = tex2D(_MainTex, i.uv0 + d * 2);
+
+        return (c1 + c2 + c3 + c4 + c5) / 15;
+    }
+
+    half4 frag_combine(v2f_multitex i) : SV_Target
+    {
+        half4 c1 = tex2D(_MainTex, i.uv0);
+        half4 c2 = tex2D(_BlurTex, i.uv1);
+        return c2 + c1 * c2.a;
     }
 
     // Debug visualization shaders
@@ -276,6 +304,22 @@ Shader "Hidden/Kino/Motion/Reconstruction"
             CGPROGRAM
             #pragma vertex vert_multitex
             #pragma fragment frag_depth
+            ENDCG
+        }
+        Pass
+        {
+            ZTest Always Cull Off ZWrite Off
+            CGPROGRAM
+            #pragma vertex vert_multitex
+            #pragma fragment frag_blur
+            ENDCG
+        }
+        Pass
+        {
+            ZTest Always Cull Off ZWrite Off
+            CGPROGRAM
+            #pragma vertex vert_multitex
+            #pragma fragment frag_combine
             ENDCG
         }
     }

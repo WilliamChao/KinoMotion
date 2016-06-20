@@ -250,7 +250,22 @@ namespace Kino
             _reconstructionMaterial.SetTexture("_NeighborMaxTex", neighborMax);
             _reconstructionMaterial.SetTexture("_VelocityTex", vbuffer);
 
-            Graphics.Blit(source, destination, _reconstructionMaterial, (int)_debugMode);
+            var temp =
+                RenderTexture.GetTemporary(source.width / 2, source.height / 2, 0, RenderTextureFormat.DefaultHDR);
+            Graphics.Blit(source, temp, _reconstructionMaterial, (int)_debugMode);
+
+            var temp2 =
+                RenderTexture.GetTemporary(source.width / 2, source.height / 2, 0, RenderTextureFormat.DefaultHDR);
+
+            _reconstructionMaterial.SetVector("_BlurVector", new Vector2(1, 0));
+            Graphics.Blit(temp, temp2, _reconstructionMaterial, 4);
+            _reconstructionMaterial.SetVector("_BlurVetor", new Vector2(0, 1));
+            Graphics.Blit(temp2, temp, _reconstructionMaterial, 4);
+
+            _reconstructionMaterial.SetTexture("_BlurTex", temp);
+            Graphics.Blit(source, destination, _reconstructionMaterial, 5);
+
+            ReleaseTemporaryRT(temp2);
 
             // Cleaning up
             ReleaseTemporaryRT(vbuffer);
