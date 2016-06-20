@@ -265,6 +265,7 @@ namespace Kino
             _reconstructionMaterial.SetTexture("_BlurTex", temp);
             Graphics.Blit(source, destination, _reconstructionMaterial, 5);
 
+            ReleaseTemporaryRT(temp);
             ReleaseTemporaryRT(temp2);
 
             // Cleaning up
