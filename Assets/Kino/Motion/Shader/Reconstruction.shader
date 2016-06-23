@@ -32,6 +32,8 @@ Shader "Hidden/Kino/Motion/Reconstruction"
 
     CGINCLUDE
 
+    #pragma multi_compile _ UNITY_COLORSPACE_GAMMA
+
     #include "UnityCG.cginc"
 
     sampler2D _MainTex;
@@ -48,6 +50,17 @@ Shader "Hidden/Kino/Motion/Reconstruction"
     half _MaxBlurRadius;
 
     static const float kDepthFilterCoeff = 15;
+
+    // Sampling the source image with color space convertion
+    half3 SampleSourceInLinear(float2 uv)
+    {
+        half3 c = tex2Dlod(_MainTex, float4(uv, 0, 0)).rgb;
+    #if defined(UNITY_COLORSPACE_GAMMA)
+        return GammaToLinearSpace(c);
+    #else
+        return c;
+    #endif
+    }
 
     // Safer version of vector normalization function
     half2 SafeNorm(half2 v)
@@ -150,6 +163,7 @@ Shader "Hidden/Kino/Motion/Reconstruction"
     // Reconstruction fragment shader
     half4 frag_reconstruction(v2f_multitex i) : SV_Target
     {
+        half4 source = tex2D(_MainTex, i.uv0);
         float2 p = i.uv1 * _ScreenParams.xy;
         float2 p_uv = i.uv1;
 
@@ -165,7 +179,7 @@ Shader "Hidden/Kino/Motion/Reconstruction"
         half l_v_max = length(v_max);
 
         // Escape early if the NeighborMax vector is too short.
-        if (l_v_max < 0.5) return tex2D(_MainTex, i.uv0);
+        if (l_v_max < 0.5) return source;
 
         // Linearized depth at p.
         half z_p = v_c_t.z;
@@ -180,7 +194,11 @@ Shader "Hidden/Kino/Motion/Reconstruction"
         // The center sample.
         half sampleCount = _LoopCount * 2.0f;
         half totalWeight = sampleCount / (l_v_c * 40);
-        half3 result = tex2D(_MainTex, i.uv0) * totalWeight;
+    #if defined(UNITY_COLORSPACE_GAMMA)
+        half3 result = GammaToLinearSpace(source.rgb) * totalWeight;
+    #else
+        half3 result = source.rgb * totalWeight;
+    #endif
 
         // Start from t=-1 + small jitter.
         // The width of jitter is equivalent to 4 sample steps.
@@ -200,7 +218,7 @@ Shader "Hidden/Kino/Motion/Reconstruction"
                 float2 S_uv1 = i.uv1 + t * v_c * _VelocityTex_TexelSize.xy;
                 half weight = SampleWeight(v_c_n, l_v_c, z_p, abs(t * l_v_max), S_uv1, w_A1);
 
-                result += tex2Dlod(_MainTex, float4(S_uv0, 0, 0)).rgb * weight;
+                result += SampleSourceInLinear(S_uv0) * weight;
                 totalWeight += weight;
 
                 t += dt;
@@ -211,14 +229,18 @@ Shader "Hidden/Kino/Motion/Reconstruction"
                 float2 S_uv1 = i.uv1 + t * v_max * _VelocityTex_TexelSize.xy;
                 half weight = SampleWeight(v_max_n, l_v_c, z_p, abs(t * l_v_max), S_uv1, w_A2);
 
-                result += tex2Dlod(_MainTex, float4(S_uv0, 0, 0)).rgb * weight;
+                result += SampleSourceInLinear(S_uv0) * weight;
                 totalWeight += weight;
 
                 t += dt;
             }
         }
 
-        return half4(result / totalWeight, 1);
+        result /= totalWeight;
+    #if defined(UNITY_COLORSPACE_GAMMA)
+        result = LinearToGammaSpace(result);
+    #endif
+        return half4(result, source.a);
     }
 
     // Debug visualization shaders
