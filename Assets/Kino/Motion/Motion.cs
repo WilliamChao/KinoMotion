@@ -120,6 +120,16 @@ namespace Kino
          "of the screen height. Larger values may introduce artifacts.")]
         float _maxBlurRadius = 5.0f;
 
+        // Color accumulation ratio.
+        public float accumulationRatio {
+            get { return _accumulationRatio; }
+            set { _accumulationRatio = value; }
+        }
+
+        [SerializeField, Range(0.0f, 0.99f)]
+        [Tooltip("Color accumulation ratio.")]
+        float _accumulationRatio = 0;
+
         #endregion
 
         #region Debug settings
@@ -137,6 +147,8 @@ namespace Kino
         [SerializeField] Shader _shader;
 
         Material _material;
+        RenderTexture _accTexture;
+        int _previousFrameCount;
 
         float VelocityScale {
             get {
@@ -191,6 +203,9 @@ namespace Kino
         {
             DestroyImmediate(_material);
             _material = null;
+
+            if (_accTexture != null) ReleaseTemporaryRT(_accTexture);
+            _accTexture = null;
         }
 
         void OnRenderImage(RenderTexture source, RenderTexture destination)
@@ -243,8 +258,52 @@ namespace Kino
             _material.SetFloat("_MaxBlurRadius", maxBlurPixels);
             _material.SetTexture("_NeighborMaxTex", neighborMax);
             _material.SetTexture("_VelocityTex", vbuffer);
+            _material.SetTexture("_AccTex", _accTexture);
+            _material.SetFloat("_AccRatio", _accumulationRatio);
 
-            Graphics.Blit(source, destination, _material, 5 + (int)_debugMode);
+            if (_debugMode != DebugMode.Off)
+            {
+                // Debug mode: Blit with the debug shader.
+                Graphics.Blit(source, destination, _material, 6 + (int)_debugMode);
+            }
+            else if (_accumulationRatio == 0)
+            {
+                // Reconstruction without color accumulation
+                Graphics.Blit(source, destination, _material, 5);
+
+                // Accumulation texture is not needed now.
+                if (_accTexture != null)
+                {
+                    ReleaseTemporaryRT(_accTexture);
+                    _accTexture = null;
+                }
+            }
+            else
+            {
+                // Reconstruction with color accumulation
+                Graphics.Blit(source, destination, _material, 6);
+
+                // Accumulation only happens when time advances.
+                if (Time.frameCount != _previousFrameCount)
+                {
+                    // Release the accumulation texture when accumulation is
+                    // disabled or the size of the screen was changed.
+                    if (_accTexture != null &&
+                        (_accTexture.width != source.width ||
+                         _accTexture.height != source.height))
+                    {
+                        ReleaseTemporaryRT(_accTexture);
+                        _accTexture = null;
+                    }
+
+                    // Create an accumulation texture if not ready.
+                    if (_accTexture == null)
+                        _accTexture = GetTemporaryRT(source, 1, source.format);
+
+                    Graphics.Blit(destination, _accTexture);
+                    _previousFrameCount = Time.frameCount;
+                }
+            }
 
             // Cleaning up
             ReleaseTemporaryRT(vbuffer);

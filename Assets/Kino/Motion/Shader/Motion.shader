@@ -97,7 +97,18 @@ Shader "Hidden/Kino/Motion"
             #pragma target 3.0
             ENDCG
         }
-        // Pass 6: Debug mode (velocity)
+        // Pass 6: Reconstruction filter with color accmulation
+        Pass
+        {
+            ZTest Always Cull Off ZWrite Off
+            CGPROGRAM
+            #include "Reconstruction.cginc"
+            #pragma vertex vert_Multitex
+            #pragma fragment frag_ReconstructionWithAcc
+            #pragma target 3.0
+            ENDCG
+        }
+        // Pass 7: Debug mode (velocity)
         Pass
         {
             ZTest Always Cull Off ZWrite Off
@@ -107,7 +118,7 @@ Shader "Hidden/Kino/Motion"
             #pragma fragment frag_Velocity
             ENDCG
         }
-        // Pass 7: Debug mode (NeighborMax)
+        // Pass 8: Debug mode (NeighborMax)
         Pass
         {
             ZTest Always Cull Off ZWrite Off
@@ -117,7 +128,7 @@ Shader "Hidden/Kino/Motion"
             #pragma fragment frag_NeighborMax
             ENDCG
         }
-        // Pass 8: Debug mode (Depth)
+        // Pass 9: Debug mode (Depth)
         Pass
         {
             ZTest Always Cull Off ZWrite Off
