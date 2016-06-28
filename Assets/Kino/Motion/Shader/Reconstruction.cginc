@@ -104,23 +104,22 @@ half SampleWeight(half2 d_n, half l_v_c, half z_p, half T, float2 S_uv, half w_A
     return weight;
 }
 
-// Reconstruction fragment shader
-half4 frag_Reconstruction(v2f_multitex i) : SV_Target
+// Reconstruction filter
+half4 ReconstructionFilter(float2 uv0, float2 uv1)
 {
-    float2 p = i.uv1 * _ScreenParams.xy;
-    float2 p_uv = i.uv1;
+    float2 p = uv1 * _ScreenParams.xy;
 
     // Nonfiltered source color;
-    half4 source = tex2D(_MainTex, i.uv0);
+    half4 source = tex2D(_MainTex, uv0);
 
     // Velocity vector at p.
-    half3 v_c_t = SampleVelocity(p_uv);
+    half3 v_c_t = SampleVelocity(uv1);
     half2 v_c = v_c_t.xy;
     half2 v_c_n = SafeNorm(v_c);
     half l_v_c = max(length(v_c), 0.5);
 
     // NeighborMax vector at p (with small).
-    half2 v_max = tex2D(_NeighborMaxTex, p_uv + JitterTile(p_uv)).xy;
+    half2 v_max = tex2D(_NeighborMaxTex, uv1 + JitterTile(uv1)).xy;
     half2 v_max_n = SafeNorm(v_max);
     half l_v_max = length(v_max);
 
@@ -145,7 +144,7 @@ half4 frag_Reconstruction(v2f_multitex i) : SV_Target
     // Start from t=-1 + small jitter.
     // The width of jitter is equivalent to 4 sample steps.
     half sampleJitter = 4.0 * 2 / (sampleCount + 4);
-    half t = -1.0 + GradientNoise(p_uv) * sampleJitter;
+    half t = -1.0 + GradientNoise(uv1) * sampleJitter;
     half dt = (2.0 - sampleJitter) / sampleCount;
 
     // Precalculate the w_A parameters.
@@ -156,8 +155,8 @@ half4 frag_Reconstruction(v2f_multitex i) : SV_Target
     {
         // Odd-numbered sample: sample along v_c.
         {
-            float2 S_uv0 = i.uv0 + t * v_c * _MainTex_TexelSize.xy;
-            float2 S_uv1 = i.uv1 + t * v_c * _VelocityTex_TexelSize.xy;
+            float2 S_uv0 = uv0 + t * v_c * _MainTex_TexelSize.xy;
+            float2 S_uv1 = uv1 + t * v_c * _VelocityTex_TexelSize.xy;
             half weight = SampleWeight(v_c_n, l_v_c, z_p, abs(t * l_v_max), S_uv1, w_A1);
 
             result += tex2Dlod(_MainTex, float4(S_uv0, 0, 0)).rgb * weight;
@@ -167,8 +166,8 @@ half4 frag_Reconstruction(v2f_multitex i) : SV_Target
         }
         // Even-numbered sample: sample along v_max.
         {
-            float2 S_uv0 = i.uv0 + t * v_max * _MainTex_TexelSize.xy;
-            float2 S_uv1 = i.uv1 + t * v_max * _VelocityTex_TexelSize.xy;
+            float2 S_uv0 = uv0 + t * v_max * _MainTex_TexelSize.xy;
+            float2 S_uv1 = uv1 + t * v_max * _VelocityTex_TexelSize.xy;
             half weight = SampleWeight(v_max_n, l_v_c, z_p, abs(t * l_v_max), S_uv1, w_A2);
 
             result += tex2Dlod(_MainTex, float4(S_uv0, 0, 0)).rgb * weight;
@@ -179,4 +178,10 @@ half4 frag_Reconstruction(v2f_multitex i) : SV_Target
     }
 
     return half4(result / totalWeight, source.a);
+}
+
+// Reconstruction fragment shader
+half4 frag_Reconstruction(v2f_multitex i) : SV_Target
+{
+    return ReconstructionFilter(i.uv0, i.uv1);
 }
