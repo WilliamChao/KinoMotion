@@ -190,5 +190,5 @@ half4 frag_ReconstructionWithAcc(v2f_multitex i) : SV_Target
 {
     half4 rf = ReconstructionFilter(i.uv0, i.uv1);
     half3 acc = tex2D(_AccTex, i.uv1).rgb;
-    return half4(lerp(rf, acc, _AccRatio), rf.a);
+    return half4(lerp(rf.rgb, acc, _AccRatio), rf.a);
 }
